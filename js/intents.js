@@ -204,7 +204,7 @@ async function performBulkPublish(ids) {
 
     try {
         log(`Sending ${ids.length} intents to server...`);
-        const res = await fetch('http://localhost:3000/api/publish', {
+        const res = await fetch('https://chatbot-backend-admin-panel.onrender.com/api/publish', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ intentIds: ids })

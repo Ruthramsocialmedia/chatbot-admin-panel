@@ -114,7 +114,7 @@ window.scanNow = async () => {
 
     try {
         log('Requesting scan from Analysis Engine...');
-        const res = await fetch('http://localhost:3000/api/scan-duplicates', {
+        const res = await fetch('https://chatbot-backend-admin-panel.onrender.com/api/scan-duplicates', {
             method: 'POST'
         });
         const data = await res.json();
