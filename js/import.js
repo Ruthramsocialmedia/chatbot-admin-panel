@@ -86,8 +86,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     continue;
                 }
 
+                // Strict Validation: Must have exactly 9 questions
+                if (questions.length !== 9) {
+                    log.innerHTML += `<span style="color:var(--warning-text)">Skipping "${slug}": Must have exactly 9 questions (found ${questions.length}).</span><br>`;
+                    continue;
+                }
+
+                // Strict Validation: Must have at least 1 answer
                 if (responses.length === 0) {
-                    log.innerHTML += `<span style="color:var(--warning-text)">Warning: "${slug}" has NO answers. Publish will fail unless you add one.</span><br>`;
+                    log.innerHTML += `<span style="color:var(--warning-text)">Skipping "${slug}": Must have at least 1 answer.</span><br>`;
+                    continue;
                 }
 
                 // 1. Create Intent (Draft)
