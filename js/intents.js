@@ -168,7 +168,9 @@ window.publishAllDrafts = async () => {
 };
 
 window.publishIntent = async () => {
-    await window.saveDraft();
+    const saved = await window.saveDraft();
+    if (!saved) return; // Stop if validation failed
+
     if (!currentIntentId) return alert('Error: Could not save draft.');
     if (!confirm('Are you sure you want to PUBLISH?')) return;
 
@@ -329,6 +331,12 @@ window.saveDraft = async () => {
         // Validation
         if (!name || !answerText) throw new Error("Name and Answer are required.");
 
+        // 9 Questions Validation
+        for (let i = 1; i <= 9; i++) {
+            const qVal = document.getElementById(`q-${i}`).value.trim();
+            if (!qVal) throw new Error(`All 9 questions are mandatory. Question ${i} is missing.`);
+        }
+
         if (!intentId) {
             const { data, error } = await sb.from('intents').insert({
                 name: name,
@@ -385,7 +393,7 @@ window.saveDraft = async () => {
                     });
                 }
             } else if (qId) {
-                // Hard Delete empty questions
+                // Hard Delete empty questions (Though validation prevents this reaching here for empty ones)
                 await sb.from('questions').delete().eq('id', qId);
             }
         }
@@ -396,9 +404,12 @@ window.saveDraft = async () => {
         fetchIntents(); // Refresh list background
         fetchStats();
 
+        return true; // Success
+
     } catch (err) {
         console.error(err);
         statusSpan.textContent = 'Error: ' + err.message;
         statusSpan.style.color = 'var(--danger-text)';
+        return false; // Failure
     }
 };
