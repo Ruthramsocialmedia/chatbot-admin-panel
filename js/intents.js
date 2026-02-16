@@ -220,8 +220,8 @@ async function performBulkPublish(ids) {
         log(`Processing Batch ${i + 1}/${batches.length} (${batchIds.length} items)...`, '#fbbf24');
 
         try {
-            // Updated URL to Render backend
-            const res = await fetch('https://chatbot-backend-xgg7.onrender.com/api/publish', {
+            // Updated URL to localhost in previous step
+            const res = await fetch(`${API_BASE_URL}/api/publish`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ intentIds: batchIds })
