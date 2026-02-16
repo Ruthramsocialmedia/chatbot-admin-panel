@@ -186,12 +186,20 @@ async function performBulkPublish(ids) {
 
     logModal.classList.remove('hidden');
     closeBtn.classList.add('hidden'); // Hide close button initially
-    logContainer.innerHTML = '<div>🚀 Starting Publish Job...</div>';
+    logContainer.innerHTML = '<div>🚀 Starting Publish Job (Batched)...</div>';
 
-    // Estimate time: ~1.5s per item (Gemini embedding + DB)
-    const estTime = Math.ceil(ids.length * 1.5);
+    // Estimate time: ~1.5s per intent (9 questions * 0.15s) - still might be slow
+    // We'll batch 1 intent at a time to avoid timeout and 429 rate limit
+    const BATCH_SIZE = 1;
+    const batches = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        batches.push(ids.slice(i, i + BATCH_SIZE));
+    }
+
+    // Add 3s per intent for rate limit
+    const estTime = Math.ceil(ids.length * 4); // 4s per intent safety
     const div = document.createElement('div');
-    div.textContent = `⏱️ Approx. time: ${estTime} seconds`;
+    div.textContent = `⏱️ Approx. time: ${Math.ceil(estTime / 60)} minutes (${batches.length} batches)`;
     div.style.color = '#60a5fa'; // Blue-ish
     div.style.marginBottom = '1rem';
     logContainer.appendChild(div);
@@ -204,45 +212,64 @@ async function performBulkPublish(ids) {
         logContainer.scrollTop = logContainer.scrollHeight;
     };
 
-    try {
-        log(`Sending ${ids.length} intents to server...`);
-        const res = await fetch('https://chatbot-backend-admin-panel.onrender.com/api/publish', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ intentIds: ids })
-        });
+    let totalSuccess = 0;
+    let totalFailed = 0;
 
-        // We assume backend handles stream or bulk. 
-        // For a better UX, ideally backend streams logs via SSE. 
-        // For now, we wait for full response.
+    for (let i = 0; i < batches.length; i++) {
+        const batchIds = batches[i];
+        log(`Processing Batch ${i + 1}/${batches.length} (${batchIds.length} items)...`, '#fbbf24');
 
-        let data;
         try {
-            data = await res.json();
-        } catch (parseErr) {
-            throw new Error(`Server returned non-JSON response (${res.status})`);
-        }
+            // Updated URL to Render backend
+            const res = await fetch('https://chatbot-backend-xgg7.onrender.com/api/publish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ intentIds: batchIds })
+            });
 
-        if (data.success) {
-            log(`✅ Job Complete! Success: ${data.success}, Failed: ${data.failed}`);
-            if (data.details) {
-                data.details.forEach(d => {
-                    if (d.status === 'failed') log(`❌ Error (${d.id}): ${d.error}`, '#ef4444');
-                    else log(`✓ Published: ${d.slug}`);
-                });
+            if (!res.ok) throw new Error(`Server status ${res.status}`);
+
+            const data = await res.json();
+
+            if (data.success) {
+                totalSuccess += data.results?.success || 0;
+                totalFailed += data.results?.failed || 0;
+                log(`  ✅ Batch ${i + 1} Done. (Success: ${data.results?.success || 0})`);
+
+                // CHECK FOR SERVER SIDE ABORT
+                if (data.results?.aborted) {
+                    log(`  🛑 Job Aborted by Server (Rate Limit/Error). Stopping...`, '#fbbf24');
+                    break; // STOP FRONTEND LOOP
+                }
+
+            } else {
+                log(`  ❌ Batch ${i + 1} Failed: ${data.message}`, '#ef4444');
+                totalFailed += batchIds.length;
+
+                // ALSO STOP IF CRITICAL ERROR (like 500 or 403 reflected in success: false)
+                break;
             }
-            fetchIntents();
-            fetchStats();
-        } else {
-            log(`❌ Job Failed: ${data.error}`, '#ef4444');
+
+        } catch (err) {
+            log(`  ❌ Error Batch ${i + 1}: ${err.message}`, '#ef4444');
+            totalFailed += batchIds.length;
+            // Stop on network error
+            break;
         }
 
-    } catch (e) {
-        log(`❌ Connection Error: ${e.message}`, '#ef4444');
-    } finally {
-        // Show close button when done (success or panic)
-        closeBtn.classList.remove('hidden');
+        // Wait 3 seconds to avoid rate limiting
+        await new Promise(r => setTimeout(r, 3000));
     }
+
+    log('--- JOB FINISHED ---');
+    log(`Total Success: ${totalSuccess}`);
+    log(`Total Failed: ${totalFailed}`);
+
+    if (totalSuccess > 0) {
+        fetchStats();
+        fetchIntents(); // Refresh list to update status badges
+    }
+    closeBtn.classList.remove('hidden');
 }
 
 
